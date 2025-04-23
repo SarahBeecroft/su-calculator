@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HPC Service Unit (SU) Calculator</title>
+    <style>
+        :root {
+            --primary-color: #0052CC;
+            --primary-hover: #0047B3;
+            --light-bg: #f5f5f5;
+            --result-bg: #E3F2FD;
+            --border-color: #ddd;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 650px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .calculator {
+            background-color: var(--light-bg);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1, h2, h3, h4 {
+            color: #222;
+            margin-top: 0;
+        }
+        
+        .form-group {
+            margin-bottom: 18px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        
+        input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        
+        input[type="number"]:focus, select:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0,82,204,0.2);
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+        
+        .result {
+            margin-top: 24px;
+            padding: 20px;
+            background-color: var(--result-bg);
+            border-radius: 6px;
+            display: none;
+        }
+        
+        .result h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        .advanced-options {
+            margin-top: 20px;
+            padding: 18px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: none;
+            background-color: white;
+        }
+        
+        .toggle-advanced {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            text-decoration: underline;
+            cursor: pointer;
+            padding: 0;
+            font-size: 14px;
+            margin: 16px 0;
+            font-weight: normal;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+        
+        .help-text {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .emphasis {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        @media (max-width: 500px) {
+            body {
+                padding: 10px;
+            }
+            
+            .calculator {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <h2>HPC Service Unit (SU) Calculator</h2>
+        <p>Estimate resource usage for High-Performance Computing jobs</p>
+        
+        <div class="form-group">
+            <label for="node-type">Node Type:</label>
+            <select id="node-type">
+                <option value="standard">Standard (1 SU/core-hour)</option>
+                <option value="high-memory">High Memory (1.5 SU/core-hour)</option>
+                <option value="gpu">GPU Node (2 SU/core-hour)</option>
+                <option value="custom">Custom Rate</option>
+            </select>
+            <div class="help-text">Select the type of computing node you'll be using</div>
+        </div>
+        
+        <div id="custom-rate-group" class="form-group" style="display: none;">
+            <label for="custom-rate">Custom SU Rate (per core-hour):</label>
+            <input type="number" id="custom-rate" min="0.1" step="0.1" value="1">
+        </div>
+        
+        <div class="form-group">
+            <label for="cores">Number of CPU Cores:</label>
+            <input type="number" id="cores" min="1" value="1">
+            <div class="help-text">Total cores requested per job</div>
+        </div>
+        
+        <div class="form-group">
+            <label for="time">Runtime (hours):</label>
+            <input type="number" id="time" min="0.1" step="0.1" value="1">
+            <div class="help-text">Expected runtime for each job</div>
+        </div>
+        
+        <div class="form-group">
+            <label for="jobs">Number of Jobs:</label>
+            <input type="number" id="jobs" min="1" value="1">
+            <div class="help-text">How many separate jobs you'll be running</div>
+        </div>
+        
+        <button id="calculate-btn" onclick="calculateSU()">Calculate SU Usage</button>
+        
+        <button class="toggle-advanced" onclick="toggleAdvanced()">Show Advanced Options</button>
+        
+        <div id="advanced-options" class="advanced-options">
+            <div class="form-group">
+                <label for="memory">Memory per Core (GB):</label>
+                <input type="number" id="memory" min="0" step="0.5" value="4">
+                <div class="help-text">RAM requested per CPU core</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="walltime">Wall Time Limit (hours):</label>
+                <input type="number" id="walltime" min="0.1" step="0.1" value="24">
+                <div class="help-text">Maximum time allocation for job</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="efficiency">Job Efficiency (%):</label>
+                <input type="number" id="efficiency" min="1" max="100" value="90">
+                <div class="help-text">Estimated percentage of allocated resources actually used</div>
+            </div>
+        </div>
+        
+        <div class="result" id="result">
+            <h3>Estimated SU Usage</h3>
+            <p id="su-result" class="emphasis">0 SUs</p>
+            <p id="su-breakdown"></p>
+            <div id="advanced-result" style="display: none;">
+                <h4>Advanced Metrics</h4>
+                <p id="effective-su"></p>
+                <p id="memory-estimate"></p>
+                <p id="walltime-limit"></p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Created for bioinformatics HPC users. Contact your HPC admin for specifics about SU rates.</p>
+    </div>
+
+    <script>
+        // Show/hide custom SU rate field when node type changes
+        document.getElementById('node-type').addEventListener('change', function() {
+            if (this.value === 'custom') {
+                document.getElementById('custom-rate-group').style.display = 'block';
+            } else {
+                document.getElementById('custom-rate-group').style.display = 'none';
+            }
+            calculateSU(); // Recalculate when node type changes
+        });
+        
+        // Toggle advanced options
+        function toggleAdvanced() {
+            const advancedOptions = document.getElementById('advanced-options');
+            const toggleButton = document.querySelector('.toggle-advanced');
+            const advancedResult = document.getElementById('advanced-result');
+            
+            if (advancedOptions.style.display === 'none' || !advancedOptions.style.display) {
+                advancedOptions.style.display = 'block';
+                toggleButton.textContent = 'Hide Advanced Options';
+                if (document.getElementById('result').style.display === 'block') {
+                    advancedResult.style.display = 'block';
+                }
+            } else {
+                advancedOptions.style.display = 'none';
+                toggleButton.textContent = 'Show Advanced Options';
+                advancedResult.style.display = 'none';
+            }
+        }
+        
+        // Add event listeners to all inputs for real-time calculation
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', calculateSU);
+        });
+        
+        // Calculate SU usage
+        function calculateSU() {
+            // Get basic values
+            const nodeType = document.getElementById('node-type').value;
+            const cores = parseFloat(document.getElementById('cores').value) || 0;
+            const time = parseFloat(document.getElementById('time').value) || 0;
+            const jobs = parseFloat(document.getElementById('jobs').value) || 0;
+            
+            // Get advanced values
+            const memory = parseFloat(document.getElementById('memory').value) || 0;
+            const walltime = parseFloat(document.getElementById('walltime').value) || 0;
+            const efficiency = parseFloat(document.getElementById('efficiency').value) || 100;
+            
+            // Set SU rate based on node type
+            let suRate = 1; // Default for standard
+            let nodeTypeName = "Standard";
+            
+            if (nodeType === "high-memory") {
+                suRate = 1.5;
+                nodeTypeName = "High Memory";
+            } else if (nodeType === "gpu") {
+                suRate = 2;
+                nodeTypeName = "GPU";
+            } else if (nodeType === "custom") {
+                suRate = parseFloat(document.getElementById('custom-rate').value) || 1;
+                nodeTypeName = "Custom";
+            }
+            
+            // Calculate total SU
+            const totalSU = cores * time * suRate * jobs;
+            
+            // Calculate advanced metrics
+            const effectiveSU = totalSU * (efficiency / 100);
+            const totalMemory = cores * memory * jobs;
+            const totalWalltime = walltime * jobs;
+            
+            // Display the result
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('su-result').textContent = `${totalSU.toLocaleString()} SUs`;
+            document.getElementById('su-breakdown').textContent = 
+                `Calculation: ${cores} cores × ${time} hours × ${suRate} SU/core-hour × ${jobs} jobs = ${totalSU.toLocaleString()} SUs`;
+            
+            // Display advanced results
+            document.getElementById('effective-su').textContent = 
+                `Effective SU (${efficiency}% efficiency): ${effectiveSU.toLocaleString()} SUs`;
+            document.getElementById('memory-estimate').textContent = 
+                `Total Memory: ${totalMemory.toLocaleString()} GB`;
+            document.getElementById('walltime-limit').textContent = 
+                `Total Wall Time: ${totalWalltime.toLocaleString()} hours`;
+                
+            // Show advanced result section if advanced options are visible
+            if (document.getElementById('advanced-options').style.display === 'block') {
+                document.getElementById('advanced-result').style.display = 'block';
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            calculateSU();
+        });
+    </script>
+</body>
+</html>

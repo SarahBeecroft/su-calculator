@@ -190,9 +190,15 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="memory">Memory (GB):</label>
-                    <input type="number" id="memory" min="1" value="64">
-                    <div class="help-text">Memory requested per node in GB</div>
+                    <label for="memory">Memory:</label>
+                    <div style="display: flex; align-items: center;">
+                        <input type="number" id="memory" min="1" value="64" style="flex: 1;">
+                        <select id="memory-unit" style="width: 80px; margin-left: 8px;">
+                            <option value="GB">GB</option>
+                            <option value="MB">MB</option>
+                        </select>
+                    </div>
+                    <div class="help-text" id="memory-help-text">Memory requested per node (max value depends on node type)</div>
                 </div>
             </div>
         </div>
@@ -243,25 +249,42 @@
     </div>
 
     <script>
-        // Setonix system parameters
+        // Setonix system parameters - Updated with correct MB values and using same value for requestable and accounting memory
         const setonixParams = {
             cpu: {
-                partitionRate: 128,       // SU per node hour
-                cores: 128,               // Total cores per node
-                requestableMemory: 230,   // Maximum memory users can request (GB)
-                accountingMemory: 256     // Memory used in accounting formula (GB)
+                partitionRate: 128,            // SU per node hour
+                cores: 128,                    // Total cores per node
+                requestableMemory: 235520,     // Maximum memory users can request (MB)
+                accountingMemory: 235520       // Memory used in accounting formula (MB) - Same as requestable
             },
             cpu_highmem: {
-                partitionRate: 128,       // SU per node hour
-                cores: 128,               // Total cores per node
-                requestableMemory: 980,   // Maximum memory users can request (GB)
-                accountingMemory: 1024    // Memory used in accounting formula (GB)
+                partitionRate: 128,            // SU per node hour
+                cores: 128,                    // Total cores per node
+                requestableMemory: 1011200,    // Maximum memory users can request (MB)
+                accountingMemory: 1011200      // Memory used in accounting formula (MB) - Same as requestable
             },
             gpu: {
-                partitionRate: 512,       // SU per node hour
-                gcds: 8                   // Total GCDs per node
+                partitionRate: 512,            // SU per node hour
+                gcds: 8                        // Total GCDs per node
             }
         };
+        
+        // Function to update memory help text and max values
+        function updateMemoryHelp() {
+            const partitionType = document.getElementById('partition-type').value;
+            if (partitionType === 'gpu') return;
+            
+            const memoryUnit = document.getElementById('memory-unit').value;
+            const memoryInput = document.getElementById('memory');
+            const memoryHelpText = document.getElementById('memory-help-text');
+            const params = partitionType === 'cpu_highmem' ? setonixParams.cpu_highmem : setonixParams.cpu;
+            
+            // Calculate max value in current units
+            const maxValue = memoryUnit === 'GB' ? params.requestableMemory / 1024 : params.requestableMemory;
+            
+            memoryHelpText.textContent = `Memory requested per node (max ${maxValue.toLocaleString()} ${memoryUnit})`;
+            memoryInput.max = maxValue;
+        }
         
         // Show/hide inputs based on partition type
         document.getElementById('partition-type').addEventListener('change', function() {
@@ -276,21 +299,25 @@
                 
                 // Update memory help text and max values based on node type
                 const memoryInput = document.getElementById('memory');
-                const memoryHelpText = memoryInput.nextElementSibling;
+                const memoryUnit = document.getElementById('memory-unit').value;
                 
+                // Set a reasonable default based on node type and current unit
                 if (partitionType === 'cpu_highmem') {
-                    memoryHelpText.textContent = `Memory requested per node in GB (max ${setonixParams.cpu_highmem.requestableMemory}GB)`;
-                    memoryInput.max = setonixParams.cpu_highmem.requestableMemory;
+                    memoryInput.value = memoryUnit === 'GB' ? 256 : 262144;
                 } else {
-                    memoryHelpText.textContent = `Memory requested per node in GB (max ${setonixParams.cpu.requestableMemory}GB)`;
-                    memoryInput.max = setonixParams.cpu.requestableMemory;
+                    memoryInput.value = memoryUnit === 'GB' ? 64 : 65536;
                 }
+                
+                updateMemoryHelp();
             }
             
             // Hide results when changing partition type
             document.getElementById('result').style.display = 'none';
             clearMessages();
         });
+        
+        // Update help text when memory unit changes
+        document.getElementById('memory-unit').addEventListener('change', updateMemoryHelp);
         
         // Add event listeners to all inputs for validation
         document.querySelectorAll('input').forEach(input => {
@@ -320,7 +347,7 @@
             if (request.memory <= 0) {
                 errors.push("Memory must be greater than 0");
             } else if (request.memory > params.requestableMemory) {
-                errors.push(`Maximum memory per node is ${params.requestableMemory}GB on this node type`);
+                errors.push(`Maximum memory per node is ${params.requestableMemory.toLocaleString()}MB on this node type`);
             }
             
             return errors;
@@ -420,7 +447,14 @@
                 errors = validateGpuRequest(request);
             } else {
                 const cores = parseInt(document.getElementById('cores').value) || 0;
-                const memory = parseInt(document.getElementById('memory').value) || 0;
+                let memory = parseInt(document.getElementById('memory').value) || 0;
+                
+                // Convert memory to MB if entered as GB
+                const memoryUnit = document.getElementById('memory-unit').value;
+                if (memoryUnit === 'GB') {
+                    memory = memory * 1024;
+                }
+                
                 request.cores = cores;
                 request.memory = memory;
                 errors = validateCpuRequest(request, partitionType === 'cpu_highmem');
@@ -454,9 +488,23 @@
                 const params = partitionType === 'cpu_highmem' ? 
                     setonixParams.cpu_highmem : setonixParams.cpu;
                 
+                // Get the memory unit for display purposes
+                const memoryUnit = document.getElementById('memory-unit').value;
+                let displayMemory, displayAccountingMemory;
+                
+                if (memoryUnit === 'GB') {
+                    displayMemory = (request.memory / 1024).toLocaleString();
+                    displayAccountingMemory = (params.accountingMemory / 1024).toLocaleString();
+                    memoryUnitText = 'GB';
+                } else {
+                    displayMemory = request.memory.toLocaleString();
+                    displayAccountingMemory = params.accountingMemory.toLocaleString();
+                    memoryUnitText = 'MB';
+                }
+                
                 proportionElement.innerHTML = `
                     Core Proportion: ${request.cores} cores / ${params.cores} total cores = ${result.coreProportion.toFixed(4)}<br>
-                    Memory Proportion: ${request.memory} GB / ${params.accountingMemory} GB total for accounting = ${result.memoryProportion.toFixed(4)}<br>
+                    Memory Proportion: ${displayMemory} ${memoryUnitText} / ${displayAccountingMemory} ${memoryUnitText} total for accounting = ${result.memoryProportion.toFixed(4)}<br>
                     <strong>Max Proportion (${result.proportionType}): ${result.maxProportion.toFixed(4)}</strong>
                 `;
             }
@@ -465,12 +513,33 @@
             showSuccess(`Calculation successful! Maximum proportion used was ${result.proportionType.toLowerCase()} proportion.`);
         }
         
+        // Validate memory input against current unit and partition
+        function validateMemoryInput() {
+            const memoryInput = document.getElementById('memory');
+            const memoryUnit = document.getElementById('memory-unit').value;
+            const partitionType = document.getElementById('partition-type').value;
+            if (partitionType === 'gpu') return;
+            
+            const params = partitionType === 'cpu_highmem' ? setonixParams.cpu_highmem : setonixParams.cpu;
+            const maxMemory = memoryUnit === 'GB' ? params.requestableMemory / 1024 : params.requestableMemory;
+            
+            // Check if the current value exceeds the maximum for the current unit and partition
+            if (parseFloat(memoryInput.value) > maxMemory) {
+                memoryInput.value = maxMemory;
+            }
+        }
+        
         // Initialize with default state
         document.addEventListener('DOMContentLoaded', function() {
             // Set initial max values for inputs
             document.getElementById('cores').max = setonixParams.cpu.cores;
-            document.getElementById('memory').max = setonixParams.cpu.requestableMemory;
             document.getElementById('gcds').max = setonixParams.gpu.gcds;
+            
+            // Set initial memory help text and max value based on the default unit (GB)
+            updateMemoryHelp();
+            
+            // Add event listener for memory unit changes to validate input
+            document.getElementById('memory-unit').addEventListener('change', validateMemoryInput);
         });
     </script>
 </body>

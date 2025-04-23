@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HPC Service Unit (SU) Calculator</title>
+    <title>Setonix HPC Service Unit (SU) Calculator</title>
     <style>
         :root {
             --primary-color: #0052CC;
@@ -11,11 +11,15 @@
             --light-bg: #f5f5f5;
             --result-bg: #E3F2FD;
             --border-color: #ddd;
+            --error-color: #D32F2F;
+            --error-bg: #FFEBEE;
+            --success-color: #388E3C;
+            --success-bg: #E8F5E9;
         }
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            max-width: 650px;
+            max-width: 700px;
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
@@ -88,27 +92,6 @@
             color: var(--primary-color);
         }
         
-        .advanced-options {
-            margin-top: 20px;
-            padding: 18px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            display: none;
-            background-color: white;
-        }
-        
-        .toggle-advanced {
-            background: none;
-            border: none;
-            color: var(--primary-color);
-            text-decoration: underline;
-            cursor: pointer;
-            padding: 0;
-            font-size: 14px;
-            margin: 16px 0;
-            font-weight: normal;
-        }
-        
         .footer {
             margin-top: 20px;
             font-size: 12px;
@@ -125,9 +108,53 @@
         .emphasis {
             font-weight: bold;
             color: var(--primary-color);
+            font-size: 1.2em;
+        }
+        
+        .error-message {
+            color: var(--error-color);
+            background-color: var(--error-bg);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .success-message {
+            color: var(--success-color);
+            background-color: var(--success-bg);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .calculation-breakdown {
+            background-color: white;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .calculation-breakdown h4 {
+            margin-top: 0;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .input-group .form-group {
+            flex: 1;
         }
         
         @media (max-width: 500px) {
+            .input-group {
+                flex-direction: column;
+            }
+            
             body {
                 padding: 10px;
             }
@@ -140,178 +167,310 @@
 </head>
 <body>
     <div class="calculator">
-        <h2>HPC Service Unit (SU) Calculator</h2>
-        <p>Estimate resource usage for High-Performance Computing jobs</p>
+        <h2>Setonix HPC Service Unit (SU) Calculator</h2>
+        <p>Estimate resource usage for High-Performance Computing jobs on Setonix</p>
         
         <div class="form-group">
-            <label for="node-type">Node Type:</label>
-            <select id="node-type">
-                <option value="standard">Standard (1 SU/core-hour)</option>
-                <option value="high-memory">High Memory (1.5 SU/core-hour)</option>
-                <option value="gpu">GPU Node (2 SU/core-hour)</option>
-                <option value="custom">Custom Rate</option>
+            <label for="partition-type">Partition Type:</label>
+            <select id="partition-type">
+                <option value="cpu">CPU (Standard Memory)</option>
+                <option value="cpu_highmem">CPU (High Memory)</option>
+                <option value="gpu">GPU</option>
             </select>
-            <div class="help-text">Select the type of computing node you'll be using</div>
+            <div class="help-text">Select the type of computing resource you'll be using</div>
         </div>
         
-        <div id="custom-rate-group" class="form-group" style="display: none;">
-            <label for="custom-rate">Custom SU Rate (per core-hour):</label>
-            <input type="number" id="custom-rate" min="0.1" step="0.1" value="1">
+        <!-- CPU-specific inputs, shown when CPU is selected -->
+        <div id="cpu-inputs">
+            <div class="input-group">
+                <div class="form-group">
+                    <label for="cores">CPU Cores:</label>
+                    <input type="number" id="cores" min="1" max="128" value="32">
+                    <div class="help-text">Number of CPU cores requested per node (max 128)</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="memory">Memory (GB):</label>
+                    <input type="number" id="memory" min="1" value="64">
+                    <div class="help-text">Memory requested per node in GB</div>
+                </div>
+            </div>
         </div>
         
-        <div class="form-group">
-            <label for="cores">Number of CPU Cores:</label>
-            <input type="number" id="cores" min="1" value="1">
-            <div class="help-text">Total cores requested per job</div>
+        <!-- GPU-specific inputs, hidden by default -->
+        <div id="gpu-inputs" style="display: none;">
+            <div class="form-group">
+                <label for="gcds">GCDs (GPUs):</label>
+                <input type="number" id="gcds" min="1" max="8" value="1">
+                <div class="help-text">Number of GPUs requested per node (max 8 GCDs)</div>
+            </div>
         </div>
         
-        <div class="form-group">
-            <label for="time">Runtime (hours):</label>
-            <input type="number" id="time" min="0.1" step="0.1" value="1">
-            <div class="help-text">Expected runtime for each job</div>
-        </div>
-        
-        <div class="form-group">
-            <label for="jobs">Number of Jobs:</label>
-            <input type="number" id="jobs" min="1" value="1">
-            <div class="help-text">How many separate jobs you'll be running</div>
+        <div class="input-group">
+            <div class="form-group">
+                <label for="nodes">Number of Nodes:</label>
+                <input type="number" id="nodes" min="1" value="1">
+                <div class="help-text">How many compute nodes you need</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="hours">Runtime (hours):</label>
+                <input type="number" id="hours" min="0.1" step="0.1" value="1">
+                <div class="help-text">Expected job duration in hours</div>
+            </div>
         </div>
         
         <button id="calculate-btn" onclick="calculateSU()">Calculate SU Usage</button>
         
-        <button class="toggle-advanced" onclick="toggleAdvanced()">Show Advanced Options</button>
-        
-        <div id="advanced-options" class="advanced-options">
-            <div class="form-group">
-                <label for="memory">Memory per Core (GB):</label>
-                <input type="number" id="memory" min="0" step="0.5" value="4">
-                <div class="help-text">RAM requested per CPU core</div>
-            </div>
-            
-            <div class="form-group">
-                <label for="walltime">Wall Time Limit (hours):</label>
-                <input type="number" id="walltime" min="0.1" step="0.1" value="24">
-                <div class="help-text">Maximum time allocation for job</div>
-            </div>
-            
-            <div class="form-group">
-                <label for="efficiency">Job Efficiency (%):</label>
-                <input type="number" id="efficiency" min="1" max="100" value="90">
-                <div class="help-text">Estimated percentage of allocated resources actually used</div>
-            </div>
-        </div>
+        <div id="error-message" class="error-message"></div>
+        <div id="success-message" class="success-message"></div>
         
         <div class="result" id="result">
             <h3>Estimated SU Usage</h3>
             <p id="su-result" class="emphasis">0 SUs</p>
-            <p id="su-breakdown"></p>
-            <div id="advanced-result" style="display: none;">
-                <h4>Advanced Metrics</h4>
-                <p id="effective-su"></p>
-                <p id="memory-estimate"></p>
-                <p id="walltime-limit"></p>
+            
+            <div class="calculation-breakdown">
+                <h4>Calculation Breakdown</h4>
+                <p id="calculation-formula"></p>
+                <p id="calculation-detail"></p>
+                <p id="proportion-detail"></p>
             </div>
         </div>
     </div>
     
     <div class="footer">
-        <p>Created for bioinformatics HPC users. Contact your HPC admin for specifics about SU rates.</p>
+        <p>Created for Setonix HPC users. For further details on the accounting model, please refer to the Setonix documentation.</p>
     </div>
 
     <script>
-        // Show/hide custom SU rate field when node type changes
-        document.getElementById('node-type').addEventListener('change', function() {
-            if (this.value === 'custom') {
-                document.getElementById('custom-rate-group').style.display = 'block';
+        // Setonix system parameters
+        const setonixParams = {
+            cpu: {
+                partitionRate: 128,       // SU per node hour
+                cores: 128,               // Total cores per node
+                requestableMemory: 230,   // Maximum memory users can request (GB)
+                accountingMemory: 256     // Memory used in accounting formula (GB)
+            },
+            cpu_highmem: {
+                partitionRate: 128,       // SU per node hour
+                cores: 128,               // Total cores per node
+                requestableMemory: 980,   // Maximum memory users can request (GB)
+                accountingMemory: 1024    // Memory used in accounting formula (GB)
+            },
+            gpu: {
+                partitionRate: 512,       // SU per node hour
+                gcds: 8                   // Total GCDs per node
+            }
+        };
+        
+        // Show/hide inputs based on partition type
+        document.getElementById('partition-type').addEventListener('change', function() {
+            const partitionType = this.value;
+            
+            if (partitionType === 'gpu') {
+                document.getElementById('cpu-inputs').style.display = 'none';
+                document.getElementById('gpu-inputs').style.display = 'block';
             } else {
-                document.getElementById('custom-rate-group').style.display = 'none';
-            }
-            calculateSU(); // Recalculate when node type changes
-        });
-        
-        // Toggle advanced options
-        function toggleAdvanced() {
-            const advancedOptions = document.getElementById('advanced-options');
-            const toggleButton = document.querySelector('.toggle-advanced');
-            const advancedResult = document.getElementById('advanced-result');
-            
-            if (advancedOptions.style.display === 'none' || !advancedOptions.style.display) {
-                advancedOptions.style.display = 'block';
-                toggleButton.textContent = 'Hide Advanced Options';
-                if (document.getElementById('result').style.display === 'block') {
-                    advancedResult.style.display = 'block';
-                }
-            } else {
-                advancedOptions.style.display = 'none';
-                toggleButton.textContent = 'Show Advanced Options';
-                advancedResult.style.display = 'none';
-            }
-        }
-        
-        // Add event listeners to all inputs for real-time calculation
-        document.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', calculateSU);
-        });
-        
-        // Calculate SU usage
-        function calculateSU() {
-            // Get basic values
-            const nodeType = document.getElementById('node-type').value;
-            const cores = parseFloat(document.getElementById('cores').value) || 0;
-            const time = parseFloat(document.getElementById('time').value) || 0;
-            const jobs = parseFloat(document.getElementById('jobs').value) || 0;
-            
-            // Get advanced values
-            const memory = parseFloat(document.getElementById('memory').value) || 0;
-            const walltime = parseFloat(document.getElementById('walltime').value) || 0;
-            const efficiency = parseFloat(document.getElementById('efficiency').value) || 100;
-            
-            // Set SU rate based on node type
-            let suRate = 1; // Default for standard
-            let nodeTypeName = "Standard";
-            
-            if (nodeType === "high-memory") {
-                suRate = 1.5;
-                nodeTypeName = "High Memory";
-            } else if (nodeType === "gpu") {
-                suRate = 2;
-                nodeTypeName = "GPU";
-            } else if (nodeType === "custom") {
-                suRate = parseFloat(document.getElementById('custom-rate').value) || 1;
-                nodeTypeName = "Custom";
-            }
-            
-            // Calculate total SU
-            const totalSU = cores * time * suRate * jobs;
-            
-            // Calculate advanced metrics
-            const effectiveSU = totalSU * (efficiency / 100);
-            const totalMemory = cores * memory * jobs;
-            const totalWalltime = walltime * jobs;
-            
-            // Display the result
-            document.getElementById('result').style.display = 'block';
-            document.getElementById('su-result').textContent = `${totalSU.toLocaleString()} SUs`;
-            document.getElementById('su-breakdown').textContent = 
-                `Calculation: ${cores} cores × ${time} hours × ${suRate} SU/core-hour × ${jobs} jobs = ${totalSU.toLocaleString()} SUs`;
-            
-            // Display advanced results
-            document.getElementById('effective-su').textContent = 
-                `Effective SU (${efficiency}% efficiency): ${effectiveSU.toLocaleString()} SUs`;
-            document.getElementById('memory-estimate').textContent = 
-                `Total Memory: ${totalMemory.toLocaleString()} GB`;
-            document.getElementById('walltime-limit').textContent = 
-                `Total Wall Time: ${totalWalltime.toLocaleString()} hours`;
+                document.getElementById('cpu-inputs').style.display = 'block';
+                document.getElementById('gpu-inputs').style.display = 'none';
                 
-            // Show advanced result section if advanced options are visible
-            if (document.getElementById('advanced-options').style.display === 'block') {
-                document.getElementById('advanced-result').style.display = 'block';
+                // Update memory help text and max values based on node type
+                const memoryInput = document.getElementById('memory');
+                const memoryHelpText = memoryInput.nextElementSibling;
+                
+                if (partitionType === 'cpu_highmem') {
+                    memoryHelpText.textContent = `Memory requested per node in GB (max ${setonixParams.cpu_highmem.requestableMemory}GB)`;
+                    memoryInput.max = setonixParams.cpu_highmem.requestableMemory;
+                } else {
+                    memoryHelpText.textContent = `Memory requested per node in GB (max ${setonixParams.cpu.requestableMemory}GB)`;
+                    memoryInput.max = setonixParams.cpu.requestableMemory;
+                }
+            }
+            
+            // Hide results when changing partition type
+            document.getElementById('result').style.display = 'none';
+            clearMessages();
+        });
+        
+        // Add event listeners to all inputs for validation
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', function() {
+                clearMessages();
+            });
+        });
+        
+        // Clear error and success messages
+        function clearMessages() {
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('success-message').style.display = 'none';
+        }
+        
+        // Validate CPU request
+        function validateCpuRequest(request, isHighMem) {
+            const params = isHighMem ? setonixParams.cpu_highmem : setonixParams.cpu;
+            
+            let errors = [];
+            
+            if (request.cores <= 0) {
+                errors.push("Cores must be greater than 0");
+            } else if (request.cores > params.cores) {
+                errors.push(`Maximum cores per node is ${params.cores}`);
+            }
+            
+            if (request.memory <= 0) {
+                errors.push("Memory must be greater than 0");
+            } else if (request.memory > params.requestableMemory) {
+                errors.push(`Maximum memory per node is ${params.requestableMemory}GB on this node type`);
+            }
+            
+            return errors;
+        }
+        
+        // Validate GPU request
+        function validateGpuRequest(request) {
+            let errors = [];
+            
+            if (request.gcds <= 0) {
+                errors.push("GCDs must be greater than 0");
+            } else if (request.gcds > setonixParams.gpu.gcds) {
+                errors.push(`Maximum GCDs per node is ${setonixParams.gpu.gcds}`);
+            }
+            
+            return errors;
+        }
+        
+        // Calculate SUs based on the accounting model
+        function calculateSUs(partitionType, request) {
+            if (partitionType === 'gpu') {
+                // GPU calculation
+                const partitionRate = setonixParams.gpu.partitionRate;
+                const gcdProportion = request.gcds / setonixParams.gpu.gcds;
+                
+                return {
+                    sus: partitionRate * gcdProportion * request.nodes * request.hours,
+                    maxProportion: gcdProportion,
+                    proportionType: 'GPU',
+                    partitionRate: partitionRate
+                };
+            } else {
+                // CPU calculation (regular or high memory)
+                const params = partitionType === 'cpu_highmem' ? 
+                    setonixParams.cpu_highmem : setonixParams.cpu;
+                
+                const partitionRate = params.partitionRate;
+                const coreProportion = request.cores / params.cores;
+                const memoryProportion = request.memory / params.accountingMemory;
+                
+                // Use the maximum of core and memory proportion
+                const maxProportion = Math.max(coreProportion, memoryProportion);
+                const proportionType = maxProportion === coreProportion ? 'Core' : 'Memory';
+                
+                return {
+                    sus: partitionRate * maxProportion * request.nodes * request.hours,
+                    maxProportion: maxProportion,
+                    coreProportion: coreProportion,
+                    memoryProportion: memoryProportion,
+                    proportionType: proportionType,
+                    partitionRate: partitionRate,
+                    accountingMemory: params.accountingMemory
+                };
             }
         }
         
-        // Initialize
+        // Display error message
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+        }
+        
+        // Display success message
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+        
+        // Main calculation function
+        function calculateSU() {
+            // Clear previous messages
+            clearMessages();
+            
+            const partitionType = document.getElementById('partition-type').value;
+            const nodes = parseInt(document.getElementById('nodes').value) || 0;
+            const hours = parseFloat(document.getElementById('hours').value) || 0;
+            
+            // Validate common parameters
+            if (nodes <= 0) {
+                return showError("Number of nodes must be greater than 0");
+            }
+            
+            if (hours <= 0) {
+                return showError("Runtime hours must be greater than 0");
+            }
+            
+            let request = { nodes: nodes, hours: hours };
+            let errors = [];
+            
+            // Process specific inputs based on partition type
+            if (partitionType === 'gpu') {
+                const gcds = parseInt(document.getElementById('gcds').value) || 0;
+                request.gcds = gcds;
+                errors = validateGpuRequest(request);
+            } else {
+                const cores = parseInt(document.getElementById('cores').value) || 0;
+                const memory = parseInt(document.getElementById('memory').value) || 0;
+                request.cores = cores;
+                request.memory = memory;
+                errors = validateCpuRequest(request, partitionType === 'cpu_highmem');
+            }
+            
+            // Check for validation errors
+            if (errors.length > 0) {
+                return showError(`Invalid request: ${errors.join(', ')}`);
+            }
+            
+            // Calculate SUs
+            const result = calculateSUs(partitionType, request);
+            
+            // Display results
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('su-result').textContent = `${result.sus.toLocaleString()} SUs`;
+            
+            // Display calculation breakdown
+            const formulaElement = document.getElementById('calculation-formula');
+            const detailElement = document.getElementById('calculation-detail');
+            const proportionElement = document.getElementById('proportion-detail');
+            
+            formulaElement.textContent = `SUs = Partition Charge Rate × Max Proportion × Nodes × Hours`;
+            
+            if (partitionType === 'gpu') {
+                detailElement.textContent = `${result.partitionRate} × ${result.maxProportion.toFixed(4)} × ${nodes} × ${hours} = ${result.sus.toLocaleString()} SUs`;
+                proportionElement.textContent = `GPU Proportion: ${request.gcds} GCDs / ${setonixParams.gpu.gcds} total GCDs = ${result.maxProportion.toFixed(4)}`;
+            } else {
+                detailElement.textContent = `${result.partitionRate} × ${result.maxProportion.toFixed(4)} × ${nodes} × ${hours} = ${result.sus.toLocaleString()} SUs`;
+                
+                const params = partitionType === 'cpu_highmem' ? 
+                    setonixParams.cpu_highmem : setonixParams.cpu;
+                
+                proportionElement.innerHTML = `
+                    Core Proportion: ${request.cores} cores / ${params.cores} total cores = ${result.coreProportion.toFixed(4)}<br>
+                    Memory Proportion: ${request.memory} GB / ${params.accountingMemory} GB total for accounting = ${result.memoryProportion.toFixed(4)}<br>
+                    <strong>Max Proportion (${result.proportionType}): ${result.maxProportion.toFixed(4)}</strong>
+                `;
+            }
+            
+            // Show success message
+            showSuccess(`Calculation successful! Maximum proportion used was ${result.proportionType.toLowerCase()} proportion.`);
+        }
+        
+        // Initialize with default state
         document.addEventListener('DOMContentLoaded', function() {
-            calculateSU();
+            // Set initial max values for inputs
+            document.getElementById('cores').max = setonixParams.cpu.cores;
+            document.getElementById('memory').max = setonixParams.cpu.requestableMemory;
+            document.getElementById('gcds').max = setonixParams.gpu.gcds;
         });
     </script>
 </body>
